@@ -46,92 +46,281 @@ class_diag <- function(score, truth, positive, cutoff=.5){
 
 # Mining, Classification, Prediction
 
-## Name and EID here
+## Jas Dinh jmd6289
 
 ### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc. See instructions for more information
+   The dataset is from Rossi et al. (1980) and investigates criminal recidivism. 432 convicts were followed up one year after release. The data includes the numeric variables of week of arrest, age, number of prior convictions, and education level. The binary variables include whether they were arrested, received financial aid, had prior work experience, were black, were married, released on parole, and job status per week. The main binary variable I will be looking at is whether they were arrested and in the dataset, 318 people were not arrested while 114 were arrested again.
 
 ```{R}
 library(tidyverse)
-# read your datasets in here, e.g., with read_csv()
-
-# if your dataset needs tidying, do so here
-
-# any other code here
+library(dplyr)
+library(readr)
+Rossi <- read_csv("Rossi.csv")
+Rossi$employment <- rowSums(Rossi[,12:63] == 'yes', na.rm=T)
+Rossi <- Rossi %>% select(-(12:63))
+Rossi %>% group_by(arrest) %>% summarize(n())
 ```
+   Additionally, I tidied the dataset by aggregating the job status per week into total weeks of employment. Also, if the person was not arrested again, their week of arrest is listed at 52 weeks.
 
 ### Cluster Analysis
 
 ```{R}
 library(cluster)
-# clustering code here
+library(GGally)
+
+RossiNum<- Rossi %>% select(week,age,prio,educ, employment)
+
+sil_width <- vector()
+for (i in 2:10) {
+    kms <- kmeans(RossiNum, centers = i)
+    sil <- silhouette(kms$cluster, dist(RossiNum))
+    sil_width[i] <- mean(sil[, 3])
+}
+ggplot() + geom_line(aes(x = 1:10, y = sil_width)) + 
+    scale_x_continuous(name = "k", breaks = 1:10)
+#3 clusters
+pam1 <- RossiNum %>% pam(k = 3)
+plot(pam1, which = 2, border = NA, col="red" )
+# Average sil width is .5 which is weak and could be artificial.
+RossiPam <- RossiNum %>% pam(3)
+RossiPam
+
+RossiNum %>% mutate(cluster = as.factor(pam1$clustering)) %>% 
+    ggpairs(aes(color = cluster))
+
 ```
 
-Discussion of clustering here
+  I examined the numerical variables of week arrested, age, prior convictions, education level, and total weeks of employment. I computed the k-means solution for each potential number of clusters in order to find the highest silhouette width since a higher width means the clusters more cohesive and separated. I found that 3 clusters had the highest silhouette width; however, the 3-cluster solution had a silhouette width of .5 which is weak and could be artificial. 
+  The first cluster had an early arrest and less weeks of employment. The second cluster had a late/no arrest, higher age range, and more weeks of employment. The third cluster had a late/no arrest and less weeks of employment.
     
     
 ### Dimensionality Reduction with PCA
 
 ```{R}
-# PCA code here
+pca1 <- princomp(RossiNum, cor = T)
+summary(pca1, loadings = T)
+
+
+pca1$loadings[1:5, 1:2] %>% as.data.frame %>% rownames_to_column %>% 
+ggplot() + geom_hline(aes(yintercept=0), lty=2) + 
+  geom_vline(aes(xintercept=0), lty=2) + ylab("PC2") + xlab("PC1") + 
+  geom_segment(aes(x=0, y=0, xend=Comp.1, yend=Comp.2), arrow=arrow(), col="red") +
+  geom_label(aes(x=Comp.1*1.1, y=Comp.2*1.1, label=rowname))
+library(factoextra)
+fviz_pca_biplot(pca1)
+
+pca1$scores %>% as.data.frame %>% mutate(week = RossiNum$week) %>% 
+    ggplot(aes(x = Comp.1, y = Comp.2)) + geom_point(aes(color = week)) + 
+    geom_smooth(method = "lm")
+
+#Variance
+eigval <- pca1$sdev^2
+varprop <- round(eigval/sum(eigval), 2)
+round(cumsum(eigval)/sum(eigval), 2) 
 ```
 
-Discussions of PCA here. 
+
+   When running the Principal Component Analysis (PCA), I calculated the relationship between variables into separate components in order to reduce the dimensions of the dataset. I chose to retain the first 4 principal components since they explain 89% of the total variance. 
+   A strong first principal component score means a late/no arrest, young age, low number of prior convictions, and a high total weeks of employment. A strong second principal component score means a low education level and high number of prior convictions.  A strong third principal component score means a young age and a late/no arrest. A strong fourth principal component means a high number of prior convictions and high education level.
 
 ###  Linear Classifier
 
 ```{R}
-# linear classifier code here
+#Logistic Regression
+logistic_fit <- glm(arrest ~ age, data = Rossi, 
+    family = "binomial")
+prob_reg <- predict(logistic_fit, type = "response")
+class_diag(prob_reg, truth = Rossi$arrest, positive = 1)
+#.6403
+
+logistic_fit2 <- glm(arrest ~ prio, data = Rossi, 
+    family = "binomial")
+prob_reg2 <- predict(logistic_fit2, type = "response")
+class_diag(prob_reg2, truth = Rossi$arrest, positive = 1)
+#.5964
+
+logistic_fit3 <- glm(arrest ~ educ, data = Rossi, 
+    family = "binomial")
+prob_reg3 <- predict(logistic_fit3, type = "response")
+class_diag(prob_reg3, truth = Rossi$arrest, positive = 1)
+#.5658
+
+logistic_fit4 <- glm(arrest ~ employment, data = Rossi, 
+    family = "binomial")
+prob_reg4 <- predict(logistic_fit4, type = "response")
+class_diag(prob_reg4, truth = Rossi$arrest, positive = 1)
+#.7619
+
+logistic_fit5 <- glm(arrest ~ age + employment + prio + educ, data = Rossi, 
+    family = "binomial")
+prob_reg5 <- predict(logistic_fit5, type = "response")
+class_diag(prob_reg5, truth = Rossi$arrest, positive = 1)
+#.7794
+
+#Confusion Matrix
+y<-Rossi$arrest
+y<- factor(y, levels=c(1,0))
+x <- prob_reg5*100
+accuracy <- vector()
+cutoff <- 1:100
+for(i in cutoff){
+  y_hat <- ifelse(x>i, 1, 0)
+  accuracy[i] <- mean(y==y_hat) 
+}
+qplot(y=accuracy)+geom_line()+scale_x_continuous(n.breaks=10)
+max(accuracy)
+cutoff[which.max(accuracy)]
+y_hat <- ifelse(x>47, 1, 0)
+y_hat <- factor(y_hat, levels=c(1,0))
+table(actual = y, predicted = y_hat) %>% addmargins
+
 ```
 
 ```{R}
-# cross-validation of linear classifier here
+#k-fold CV
+k=10
+data<-Rossi[sample(nrow(Rossi)),]
+folds<-cut(seq(1:nrow(Rossi)),breaks=k,labels=F)
+diags<-NULL
+for(i in 1:k){
+  train<-Rossi[folds!=i,] 
+  test<-Rossi[folds==i,]
+  truth<-test$arrest
+  fit<-glm(arrest~age + employment + prio + educ,data=train,family="binomial")
+  probs<-predict(fit,newdata = test,type="response")
+  diags<-rbind(diags,class_diag(probs,truth, positive=1))
+}
+summarize_all(diags,mean)
 ```
 
-Discussion here
+   After running a logistic regression on each numeric variables against the binary variable of arrest, the variables with the highest area under the curve was age and total weeks of employment which means they are the best factors in predicting whether someone gets arrested again. I ran another logistic regression with all the numeric variables and the area under the curve was .7794 which means the model is fairly good. The confusion matrix shows that 330 participants out of 432 were accurately identified as arrested or not.
+   After performing a k-fold cross-validation with 10 folds, the area under the curve is .76415 which is similar to the logistic regression model in performing fairly. There does not seem to be signs of overfitting since the cross-validation did not perform significantly worse than the logistic regression model.
 
 ### Non-Parametric Classifier
 
 ```{R}
 library(caret)
-# non-parametric classifier code here
+knn_fit <- knn3(arrest~age + employment + prio + educ, data = Rossi)
+prob_knn <- predict(knn_fit, Rossi)[,2]
+class_diag(prob_knn, Rossi$arrest, positive = 1)
+
+#Confusion Matrix
+y2<-Rossi$arrest
+y2<- factor(y2, levels=c(1,0))
+x2 <- prob_reg5*100
+accuracy <- vector()
+cutoff <- 1:100
+for(i in cutoff){
+  y_hat2 <- ifelse(x2>i, 1, 0)
+  accuracy[i] <- mean(y2==y_hat2) 
+}
+qplot(y=accuracy)+geom_line()+scale_x_continuous(n.breaks=10)
+max(accuracy)
+cutoff[which.max(accuracy)]
+y_hat2 <- ifelse(x2>47, 1, 0)
+y_hat2 <- factor(y_hat2, levels=c(1,0))
+table(actual = y2, predicted = y_hat2) %>% addmargins
+
 ```
 
 ```{R}
-# cross-validation of np classifier here
+#k-fold CV
+k2=10
+data2<-Rossi[sample(nrow(Rossi)),]
+folds2<-cut(seq(1:nrow(Rossi)),breaks=k2,labels=F)
+diags2<-NULL
+for(i in 1:k2){
+  train2<-Rossi[folds2!=i,] 
+  test2<-Rossi[folds2==i,]
+  truth2<-test2$arrest
+  fit2<-glm(arrest~age + employment + prio + educ,data=train,family="binomial")
+  probs2<-predict(fit2,newdata = test2,type="response")
+  diags2<-rbind(diags2,class_diag(probs2,truth2, positive=1))
+}
+summarize_all(diags2,mean)
 ```
 
-Discussion
+Using k-nearest-neighbors with all numeric variables, the area under the curve was .8527 which means a good performance from the model. The confusion matrix shows that the model identified 330 people correctly as arrested or not. However, the cross-validation shows that the area under the curve dropped to .77712 which means there is likely overfitting. Both cross-validations from the nonparametric model and the linear model performed similarly.
 
 
 ### Regression/Numeric Prediction
 
 ```{R}
-# regression model code here
+#Linear Regression
+fit3<-lm(arrest~age + employment + prio + educ,data=Rossi)
+yhat3<-predict(fit3)
+mean((Rossi$arrest-yhat3)^2)
 ```
 
 ```{R}
-# cross-validation of regression model here
+# k-fold CV
+k3=10
+data3<-Rossi[sample(nrow(Rossi)),]
+folds3<-cut(seq(1:nrow(Rossi)),breaks=k3,labels=F)
+diags3<-NULL
+for(i in 1:k3){
+  train3<-data3[folds3!=i,]
+  test3<-data3[folds3==i,]
+  fit3k<-lm(arrest~.,data=train3)
+  yhat3k<-predict(fit3k,newdata=test3)
+  diags3<-mean((test3$arrest-yhat3k)^2) 
+}
+mean(diags3) 
 ```
 
-Discussion
+The mean squared error (MSE) of the linear regression was 0.16 which means it is a very good fit. The MSE for the cross-validation of the linear regression was even smaller at .03 which is good because it means overfitting is unlikely.
 
 ### Python 
 
 ```{R}
 library(reticulate)
+use_python("/usr/local/bin/python3")
+py_install(packages = "matplotlib")
+py_install(packages = "numpy")
+py_install(packages = "pandas")
+py_install(packages = "seaborn")
+matplotlib <- import("matplotlib")
+matplotlib$use("Agg", force = TRUE)
+
 ```
 
 ```{python}
-# python code here
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+plt.scatter("age", "employment", c="arrest", data=r.Rossi)
+plt.xlabel('Age')
+plt.ylabel('Weeks of Employment')
+plt.title('Arrests for Age vs Employment')
+plt.show()
+
+pRossi=r.Rossi
+pRossi.to_csv("pRossi.csv")
+pRossi = pd.read_csv("pRossi.csv", index_col=0)
+
+aRossi = (pRossi.query('arrest == 1').filter(['age', 'employment']))
+xRossi = (pRossi.query('arrest == 0').filter(['age', 'employment']))
+
 ```
 
-Discussion
+```{r}
+library(gt)
+
+py$aRossi %>% summarize(Age = mean(age), Employment = mean(employment)) %>% gt() %>% fmt_number(columns = 1:2, decimals = 2) %>% tab_header(title = "Mean Statistics of Arrested")
+
+py$xRossi %>% summarize(Age = mean(age), Employment = mean(employment)) %>% gt() %>% fmt_number(columns = 1:2, decimals = 2) %>% tab_header(title = "Mean Statistics of Not Arrested")
+```
+
+To demonstrate sharing objects between R and Python, I called the Rossi datset from R in Python in order to use matplotlib to create a scatterplot of age vs employment. Then, I wrangled the data in Python and called the subsets of data in R where I continued my analysis of age and employment for arrest. 
 
 ### Concluding Remarks
 
-Include concluding remarks here, if any
+   With various machine learning models, I was able to analyze factors in recidivism. My cluster analysis shows that people who are not employed and young are more likely to get arrested again. This shows the importance of reducing stigma against convicts and encourage companies to hire people previously convicted. My principal component analysis shows that young, employed people with low prior convictions and a late/no arrest consisted of over a third of the variance in my data. My models for the linear and nonparametric classifiers performed fairly in predicting whether a person will get arrested again and if I were to repeat this project, I would like to explore more types of models to see if I can maximize accuracy. With Python and R, I was able to analyze how the major factors of age and total weeks of employment correlated with getting arrested again. As seen in the tables, people who are arrested again tend to have a younger age and significantly less weeks of employment. 
+   Overall, I learned the young and unemployed are at a higher risk of getting arrested again and it is important to provide career services to convicts in order to reduce recidivism.
+ 
 
 
 
