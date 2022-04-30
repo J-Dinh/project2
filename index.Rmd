@@ -1,15 +1,8 @@
 ---
 title: 'Project 2: Data Mining, Classification, Prediction'
-author: "SDS322E"
-date: ''
-output:
-  html_document:
-    toc: yes
-    toc_float:
-      collapsed: no
-      smooth_scroll: yes
-  pdf_document:
-    toc: no
+author: "Jas Dinh SDS322E"
+date: '2021-12-12'
+output: rmdformats::readthedown
 ---
 
 ```{r setup, include=FALSE}
@@ -44,11 +37,8 @@ class_diag <- function(score, truth, positive, cutoff=.5){
 }
 ```
 
-# Mining, Classification, Prediction
 
-## Jas Dinh jmd6289
-
-### Introduction 
+## Introduction 
 
    The dataset is from Rossi et al. (1980) and investigates criminal recidivism. 432 convicts were followed up one year after release. The data includes the numeric variables of week of arrest, age, number of prior convictions, and education level. The binary variables include whether they were arrested, received financial aid, had prior work experience, were black, were married, released on parole, and job status per week. The main binary variable I will be looking at is whether they were arrested and in the dataset, 318 people were not arrested while 114 were arrested again.
 
@@ -63,7 +53,7 @@ Rossi %>% group_by(arrest) %>% summarize(n())
 ```
    Additionally, I tidied the dataset by aggregating the job status per week into total weeks of employment. Also, if the person was not arrested again, their week of arrest is listed at 52 weeks.
 
-### Cluster Analysis
+## Cluster Analysis
 
 ```{R}
 library(cluster)
@@ -95,7 +85,7 @@ RossiNum %>% mutate(cluster = as.factor(pam1$clustering)) %>%
   The first cluster had an early arrest and less weeks of employment. The second cluster had a late/no arrest, higher age range, and more weeks of employment. The third cluster had a late/no arrest and less weeks of employment.
     
     
-### Dimensionality Reduction with PCA
+## Dimensionality Reduction with PCA
 
 ```{R}
 pca1 <- princomp(RossiNum, cor = T)
@@ -124,7 +114,7 @@ round(cumsum(eigval)/sum(eigval), 2)
    When running the Principal Component Analysis (PCA), I calculated the relationship between variables into separate components in order to reduce the dimensions of the dataset. I chose to retain the first 4 principal components since they explain 89% of the total variance. 
    A strong first principal component score means a late/no arrest, young age, low number of prior convictions, and a high total weeks of employment. A strong second principal component score means a low education level and high number of prior convictions.  A strong third principal component score means a young age and a late/no arrest. A strong fourth principal component means a high number of prior convictions and high education level.
 
-###  Linear Classifier
+##  Linear Classifier
 
 ```{R}
 #Logistic Regression
@@ -197,7 +187,7 @@ summarize_all(diags,mean)
    After running a logistic regression on each numeric variables against the binary variable of arrest, the variables with the highest area under the curve was age and total weeks of employment which means they are the best factors in predicting whether someone gets arrested again. I ran another logistic regression with all the numeric variables and the area under the curve was .7794 which means the model is fairly good. The confusion matrix shows that 330 participants out of 432 were accurately identified as arrested or not.
    After performing a k-fold cross-validation with 10 folds, the area under the curve is .76415 which is similar to the logistic regression model in performing fairly. There does not seem to be signs of overfitting since the cross-validation did not perform significantly worse than the logistic regression model.
 
-### Non-Parametric Classifier
+## Non-Parametric Classifier
 
 ```{R}
 library(caret)
@@ -244,7 +234,7 @@ summarize_all(diags2,mean)
 Using k-nearest-neighbors with all numeric variables, the area under the curve was .8527 which means a good performance from the model. The confusion matrix shows that the model identified 330 people correctly as arrested or not. However, the cross-validation shows that the area under the curve dropped to .77712 which means there is likely overfitting. Both cross-validations from the nonparametric model and the linear model performed similarly.
 
 
-### Regression/Numeric Prediction
+## Regression/Numeric Prediction
 
 ```{R}
 #Linear Regression
@@ -271,11 +261,11 @@ mean(diags3)
 
 The mean squared error (MSE) of the linear regression was 0.16 which means it is a very good fit. The MSE for the cross-validation of the linear regression was even smaller at .03 which is good because it means overfitting is unlikely.
 
-### Python 
+## Python 
 
 ```{R}
 library(reticulate)
-use_python("/usr/local/bin/python3")
+#use_python("/usr/local/bin/python3")
 py_install(packages = "matplotlib")
 py_install(packages = "numpy")
 py_install(packages = "pandas")
@@ -316,7 +306,7 @@ py$xRossi %>% summarize(Age = mean(age), Employment = mean(employment)) %>% gt()
 
 To demonstrate sharing objects between R and Python, I called the Rossi datset from R in Python in order to use matplotlib to create a scatterplot of age vs employment. Then, I wrangled the data in Python and called the subsets of data in R where I continued my analysis of age and employment for arrest. 
 
-### Concluding Remarks
+## Concluding Remarks
 
    With various machine learning models, I was able to analyze factors in recidivism. My cluster analysis shows that people who are not employed and young are more likely to get arrested again. This shows the importance of reducing stigma against convicts and encourage companies to hire people previously convicted. My principal component analysis shows that young, employed people with low prior convictions and a late/no arrest consisted of over a third of the variance in my data. My models for the linear and nonparametric classifiers performed fairly in predicting whether a person will get arrested again and if I were to repeat this project, I would like to explore more types of models to see if I can maximize accuracy. With Python and R, I was able to analyze how the major factors of age and total weeks of employment correlated with getting arrested again. As seen in the tables, people who are arrested again tend to have a younger age and significantly less weeks of employment. 
    Overall, I learned the young and unemployed are at a higher risk of getting arrested again and it is important to provide career services to convicts in order to reduce recidivism.
